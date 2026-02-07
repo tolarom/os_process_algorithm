@@ -3,20 +3,26 @@ package com.example.processsim.algorithms;
 import java.util.*;
 
 /**
- * Multi-Level Feedback Queue (MLFQ) scheduling algorithm.
- * 
- * Uses multiple queues with different priorities and time quantums:
- * - Queue 0 (highest priority): quantum = 4
- * - Queue 1 (medium priority): quantum = 8
- * - Queue 2 (lowest priority): FCFS (runs to completion)
- * 
- * New processes start at their initial priority queue (0-2).
- * If a process uses its full quantum, it moves down to a lower priority queue.
+ * Multilevel Feedback Queue (MLFQ) scheduling algorithm.
+ *
+ * 3 queues:
+ *   Queue 0 – Round Robin with quantum = 2
+ *   Queue 1 – Round Robin with quantum = 4
+ *   Queue 2 – FCFS (runs to completion)
+ *
+ * Rules:
+ *   • New processes enter Queue 0.
+ *   • If a process uses its full quantum without finishing, it is demoted
+ *     to the next lower-priority queue.
+ *   • Higher-priority queues are always served first (preemptive between queues).
+ *   • Aging: if a process waits in Queue 1 or Queue 2 for ≥ AGING_THRESHOLD
+ *     time units without running, it is promoted one level to prevent starvation.
  */
 public class MLFQAlgorithm extends SchedulingAlgorithm {
 
     private static final int NUM_QUEUES = 3;
-    private static final int[] QUANTUMS = {4, 8, Integer.MAX_VALUE}; // Q0, Q1, Q2 (FCFS)
+    private static final int[] QUANTA = {2, 4, Integer.MAX_VALUE}; // Q2 = FCFS
+    private static final int AGING_THRESHOLD = 10;
 
     public MLFQAlgorithm(List<Proc> processes) {
         super(processes);
@@ -24,133 +30,136 @@ public class MLFQAlgorithm extends SchedulingAlgorithm {
 
     @Override
     public String getName() {
-        return "Multi-Level Feedback Queue (MLFQ)";
+        return "MLFQ [Q=2, 4, FCFS]";
+    }
+
+    /* ── tiny helper to track per-process MLFQ state ── */
+    private static class MlfqProc {
+        Proc proc;
+        int queueLevel;          // 0, 1, or 2
+        int lastRunTime;         // last time this process was executed
+
+        MlfqProc(Proc p, int arrivalTime) {
+            this.proc = p;
+            this.queueLevel = 0; // all new arrivals enter queue 0
+            this.lastRunTime = arrivalTime;
+        }
     }
 
     @Override
     public SimResult run() {
-        List<Proc> procs = new ArrayList<>(processes.stream().map(Proc::copy).toList());
+        List<Proc> procs = new ArrayList<>(processes);
         procs.sort(Comparator.comparingInt(p -> p.arrival));
 
-        List<GanttEntry> timeline = new ArrayList<>();
-        
-        // Create queues for each level
+        // Wrap each Proc with MLFQ metadata
+        List<MlfqProc> allMlfq = new ArrayList<>();
+        for (Proc p : procs) {
+            allMlfq.add(new MlfqProc(p, p.arrival));
+        }
+
+        // Three ready queues (FIFO order inside each)
         @SuppressWarnings("unchecked")
-        Queue<Proc>[] queues = new LinkedList[NUM_QUEUES];
+        Queue<MlfqProc>[] queues = new LinkedList[NUM_QUEUES];
         for (int i = 0; i < NUM_QUEUES; i++) {
             queues[i] = new LinkedList<>();
         }
-        
-        // Track which queue each process is in
-        Map<Proc, Integer> queueLevel = new HashMap<>();
-        
+
+        List<GanttEntry> timeline = new ArrayList<>();
         int time = 0;
-        int index = 0; // Index for adding arriving processes
+        int admitted = 0;  // index into sorted procs
         int completed = 0;
 
         while (completed < procs.size()) {
-            // Add newly arrived processes to their initial priority queue
-            while (index < procs.size() && procs.get(index).arrival <= time) {
-                Proc p = procs.get(index++);
-                int initialQueue = Math.min(p.priority, NUM_QUEUES - 1); // Ensure valid queue (0-2)
-                queues[initialQueue].add(p);
-                queueLevel.put(p, initialQueue);
+
+            // 1. Admit newly arrived processes into Queue 0
+            while (admitted < allMlfq.size() && allMlfq.get(admitted).proc.arrival <= time) {
+                queues[0].add(allMlfq.get(admitted));
+                admitted++;
             }
 
-            // Find the highest priority non-empty queue
-            Proc currentProc = null;
-            int currentQueue = -1;
-            for (int q = 0; q < NUM_QUEUES; q++) {
-                if (!queues[q].isEmpty()) {
-                    currentProc = queues[q].poll();
-                    currentQueue = q;
+            // 2. Aging – promote starving processes
+            applyAging(queues, time);
+
+            // 3. Pick the highest-priority non-empty queue
+            int level = -1;
+            for (int i = 0; i < NUM_QUEUES; i++) {
+                if (!queues[i].isEmpty()) {
+                    level = i;
                     break;
                 }
             }
 
-            if (currentProc == null) {
-                // No process ready, advance time
-                if (index < procs.size()) {
-                    time = procs.get(index).arrival;
-                }
-                continue;
-            }
-
-            // Record start time
-            if (currentProc.start == -1) {
-                currentProc.start = time;
-            }
-
-            // Determine how long to run
-            int quantum = QUANTUMS[currentQueue];
-            int runTime = Math.min(quantum, currentProc.remaining);
-            
-            // Check if a higher priority process will arrive during execution
-            int nextArrival = Integer.MAX_VALUE;
-            if (index < procs.size()) {
-                nextArrival = procs.get(index).arrival;
-            }
-            
-            // For queues 0 and 1, check for preemption by new arrivals
-            if (currentQueue > 0 && nextArrival < time + runTime) {
-                runTime = nextArrival - time;
-            }
-
-            // Execute the process
-            timeline.add(new GanttEntry(currentProc.name, time, time + runTime));
-            currentProc.remaining -= runTime;
-            time += runTime;
-
-            // Add any processes that arrived during execution to their initial priority queue
-            while (index < procs.size() && procs.get(index).arrival <= time) {
-                Proc p = procs.get(index++);
-                int initialQueue = Math.min(p.priority, NUM_QUEUES - 1); // Ensure valid queue (0-2)
-                queues[initialQueue].add(p);
-                queueLevel.put(p, initialQueue);
-            }
-
-            // Handle process completion or demotion
-            if (currentProc.remaining == 0) {
-                currentProc.finish = time;
-                completed++;
-            } else {
-                // Process didn't finish
-                if (runTime >= QUANTUMS[currentQueue] && currentQueue < NUM_QUEUES - 1) {
-                    // Used full quantum, demote to lower priority queue
-                    int newQueue = currentQueue + 1;
-                    queues[newQueue].add(currentProc);
-                    queueLevel.put(currentProc, newQueue);
+            if (level == -1) {
+                // CPU idle – fast-forward to next arrival
+                if (admitted < allMlfq.size()) {
+                    time = allMlfq.get(admitted).proc.arrival;
+                    continue;
                 } else {
-                    // Was preempted, stay in same queue
-                    queues[currentQueue].add(currentProc);
+                    break; // nothing left
                 }
+            }
+
+            MlfqProc mp = queues[level].poll();
+            Proc p = mp.proc;
+
+            if (p.start == -1) {
+                p.start = time;
+            }
+
+            int quantum = QUANTA[level];
+            int runTime = Math.min(quantum, p.remaining);
+
+            // Execute – but we must also check for higher-priority preemption
+            // For simplicity (and clarity), we run the full slice then re-evaluate.
+            // Within the slice we still admit arrivals so they are queued correctly.
+            timeline.add(new GanttEntry(p.name, time, time + runTime));
+            p.remaining -= runTime;
+            time += runTime;
+            mp.lastRunTime = time;
+
+            // Admit processes that arrived during execution
+            while (admitted < allMlfq.size() && allMlfq.get(admitted).proc.arrival <= time) {
+                queues[0].add(allMlfq.get(admitted));
+                admitted++;
+            }
+
+            if (p.remaining == 0) {
+                // Process finished
+                p.finish = time;
+                completed++;
+            } else if (runTime >= quantum && level < NUM_QUEUES - 1) {
+                // Used full quantum → demote
+                mp.queueLevel = level + 1;
+                queues[mp.queueLevel].add(mp);
+            } else {
+                // Did not use full quantum (preempted by higher queue after re-evaluation)
+                // Stay in same queue
+                queues[level].add(mp);
             }
         }
 
-        // Merge consecutive entries for the same process
-        List<GanttEntry> mergedTimeline = mergeTimeline(timeline);
-        
-        return buildResult(procs, mergedTimeline);
+        return buildResult(procs, timeline);
     }
-    
-    private List<GanttEntry> mergeTimeline(List<GanttEntry> timeline) {
-        if (timeline.isEmpty()) return timeline;
-        
-        List<GanttEntry> merged = new ArrayList<>();
-        GanttEntry current = timeline.get(0);
-        
-        for (int i = 1; i < timeline.size(); i++) {
-            GanttEntry next = timeline.get(i);
-            if (next.name.equals(current.name) && next.start == current.end) {
-                // Merge consecutive entries for same process
-                current = new GanttEntry(current.name, current.start, next.end);
-            } else {
-                merged.add(current);
-                current = next;
+
+    /**
+     * Promote any process that has been waiting ≥ AGING_THRESHOLD time units
+     * without running, moving it one queue level up.
+     */
+    private void applyAging(Queue<MlfqProc>[] queues, int currentTime) {
+        for (int level = 1; level < NUM_QUEUES; level++) {
+            Iterator<MlfqProc> it = queues[level].iterator();
+            List<MlfqProc> promoted = new ArrayList<>();
+            while (it.hasNext()) {
+                MlfqProc mp = it.next();
+                if (currentTime - mp.lastRunTime >= AGING_THRESHOLD) {
+                    it.remove();
+                    mp.queueLevel = level - 1;
+                    mp.lastRunTime = currentTime; // reset aging clock
+                    promoted.add(mp);
+                }
             }
+            // Add promoted processes to the end of the higher-priority queue
+            queues[level - 1].addAll(promoted);
         }
-        merged.add(current);
-        
-        return merged;
     }
 }

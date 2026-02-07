@@ -26,7 +26,7 @@ public class ProcessSimulator extends JFrame {
 
     private DefaultTableModel tableModel;
     private JTextArea outputArea;
-    private JTextField nameField, arrivalField, burstField, quantumField, priorityField;
+    private JTextField nameField, arrivalField, burstField, quantumField;
     private JComboBox<String> algorithmCombo;
     private GanttPanel ganttPanel;
     private JLabel statusLabel;
@@ -129,18 +129,14 @@ public class ProcessSimulator extends JFrame {
         arrivalField = createStyledTextField(5);
         burstField = createStyledTextField(5);
         quantumField = createStyledTextField(5);
-        quantumField.setText("4");
-        priorityField = createStyledTextField(5);
-        priorityField.setText("0");
-        priorityField.setEnabled(false);
+        quantumField.setText("2");
+        // Priority removed — field reserved previously for MLFQ
 
         algorithmCombo = new JComboBox<>(new String[]{"Round Robin", "FCFS", "SJF", "SRTF", "MLFQ"});
         algorithmCombo.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         algorithmCombo.addActionListener(e -> {
             boolean isRR = algorithmCombo.getSelectedIndex() == 0;
-            boolean isMLFQ = algorithmCombo.getSelectedIndex() == 4;
             quantumField.setEnabled(isRR);
-            priorityField.setEnabled(isMLFQ);
         });
 
         // Row 0
@@ -159,10 +155,6 @@ public class ProcessSimulator extends JFrame {
         form.add(createLabel("Burst:"), gbc);
         gbc.gridx = 1;
         form.add(burstField, gbc);
-        gbc.gridx = 2;
-        form.add(createLabel("Priority:"), gbc);
-        gbc.gridx = 3;
-        form.add(priorityField, gbc);
 
         // Row 2
         gbc.gridx = 0; gbc.gridy = 2;
@@ -207,7 +199,7 @@ public class ProcessSimulator extends JFrame {
     private JPanel createTableCard() {
         JPanel card = createCard("Process Queue");
 
-        tableModel = new DefaultTableModel(new Object[]{"#", "Name", "Arrival", "Burst", "Priority"}, 0) {
+        tableModel = new DefaultTableModel(new Object[]{"#", "Name", "Arrival", "Burst"}, 0) {
             @Override public boolean isCellEditable(int row, int col) { return col > 0; }
         };
         JTable table = new JTable(tableModel);
@@ -436,31 +428,28 @@ public class ProcessSimulator extends JFrame {
         if (name.isEmpty()) name = "P" + processCounter;
         String at = arrivalField.getText().trim();
         String bt = burstField.getText().trim();
-        String pt = priorityField.getText().trim();
+        // priority removed; ignore any priority UI
         if (at.isEmpty()) at = "0";
         if (bt.isEmpty()) { showError("Burst time is required"); return; }
-        if (pt.isEmpty()) pt = "0";
         try {
             int arrival = Integer.parseInt(at);
             int burst = Integer.parseInt(bt);
-            int priority = Integer.parseInt(pt);
             if (burst <= 0) { showError("Burst must be > 0"); return; }
-            if (priority < 0 || priority > 2) { showError("Priority must be 0-2 (0=highest)"); return; }
-            tableModel.addRow(new Object[]{processCounter++, name, arrival, burst, priority});
+            tableModel.addRow(new Object[]{processCounter++, name, arrival, burst});
             nameField.setText("P" + processCounter);
-            arrivalField.setText(""); burstField.setText(""); priorityField.setText("0");
+            arrivalField.setText(""); burstField.setText("");
             statusLabel.setText("Added process: " + name);
         } catch (NumberFormatException ex) {
-            showError("Arrival, Burst, and Priority must be integers.");
+            showError("Arrival and Burst must be integers.");
         }
     }
 
     private void loadSampleData(ActionEvent e) {
         tableModel.setRowCount(0);
         processCounter = 1;
-        Object[][] samples = {{"P1", 0, 5, 0}, {"P2", 1, 3, 1}, {"P3", 2, 8, 0}, {"P4", 3, 6, 2}};
+        Object[][] samples = {{"P1", 0, 5}, {"P2", 1, 3}, {"P3", 2, 8}, {"P4", 3, 6}};
         for (Object[] s : samples) {
-            tableModel.addRow(new Object[]{processCounter++, s[0], s[1], s[2], s[3]});
+            tableModel.addRow(new Object[]{processCounter++, s[0], s[1], s[2]});
         }
         nameField.setText("P" + processCounter);  // Set next name (P5)
         statusLabel.setText("Loaded sample data");
@@ -474,10 +463,9 @@ public class ProcessSimulator extends JFrame {
             String n = tableModel.getValueAt(i, 1).toString();
             int a = Integer.parseInt(tableModel.getValueAt(i, 2).toString());
             int b = Integer.parseInt(tableModel.getValueAt(i, 3).toString());
-            int p = Integer.parseInt(tableModel.getValueAt(i, 4).toString());
-            list.add(new Proc(n, a, b, p));
+            list.add(new Proc(n, a, b));
         }
-        int quantum = 4;
+        int quantum = 2;
         try { quantum = Integer.parseInt(quantumField.getText().trim()); } catch (NumberFormatException ignored) {}
 
         String algo = (String) algorithmCombo.getSelectedItem();
