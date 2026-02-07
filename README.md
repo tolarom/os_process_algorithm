@@ -120,19 +120,26 @@ If you have an IDE like IntelliJ IDEA, Eclipse, or VS Code with Java extension:
 
 **Type**: Preemptive
 
-**Description**: Uses multiple priority queues with different time quantums. New processes start at their specified priority level. If a process uses its full quantum, it moves to a lower priority queue.
+**Description**: Uses 3 priority queues with increasing time quantums. All new processes enter Queue 0 (highest priority). If a process uses its full quantum without finishing, it is **demoted** to the next lower-priority queue. Higher-priority queues are always served first. An **aging** mechanism promotes processes that have been waiting too long, preventing starvation.
 
 **Queue Structure**:
-- **Queue 0** (Highest Priority): Time quantum = 4
-- **Queue 1** (Medium Priority): Time quantum = 8
-- **Queue 2** (Lowest Priority): FCFS (runs to completion)
+| Queue | Priority | Time Quantum | Scheduling |
+|-------|----------|-------------|------------|
+| Q0 | Highest | 2 | Round Robin |
+| Q1 | Medium | 4 | Round Robin |
+| Q2 | Lowest | ∞ | FCFS (runs to completion) |
+
+**Promotion / Demotion Rules**:
+- **Demotion**: A process that exhausts its full quantum is moved down one queue level (Q0 → Q1 → Q2).
+- **Promotion (Aging)**: A process that has been waiting ≥ 10 time units without receiving CPU time is promoted up one queue level to prevent starvation.
+- Processes that finish before their quantum expires stay at the same level (relevant if re-queued).
 
 **Characteristics**:
-- Adapts to process behavior (I/O vs CPU-bound)
-- Favors short processes and I/O-bound processes
-- Prevents starvation by aging mechanism
-- Complex implementation
-- Good response time for interactive processes
+- Adapts to process behavior — short / I/O-bound processes finish quickly in Q0
+- Long CPU-bound processes gradually sink to Q2 (FCFS)
+- Aging prevents indefinite starvation of lower-priority processes
+- Good balance between response time and throughput
+- No manual priority assignment required
 
 **Best Use Case**: General-purpose operating systems with mixed workloads
 
@@ -150,7 +157,6 @@ If you have an IDE like IntelliJ IDEA, Eclipse, or VS Code with Java extension:
      - **Name**: Process identifier (e.g., P1, P2)
      - **Arrival Time**: When the process arrives in the ready queue
      - **Burst Time**: CPU time required by the process
-     - **Priority**: Priority level for MLFQ (0 = highest, 2 = lowest)
    - Click **Add Process**
 
 3. **Select algorithm**:
@@ -205,22 +211,22 @@ If you have an IDE like IntelliJ IDEA, Eclipse, or VS Code with Java extension:
 
 #### MLFQ (Multi-Level Feedback Queue)
 ```
-1. Add processes and set their Priority (0, 1, or 2)
-   - Priority 0: Starts in highest priority queue
-   - Priority 1: Starts in medium priority queue
-   - Priority 2: Starts in lowest priority queue
-2. Select "Multi-Level Feedback Queue (MLFQ)" from dropdown
+1. Add processes (all start in Queue 0 — highest priority)
+2. Select "MLFQ" from dropdown
 3. Click "Run Scheduler"
-4. Observe processes moving between queues based on quantum usage
+4. Observe:
+   - Short processes finish quickly in Q0 (quantum=2)
+   - Longer processes get demoted to Q1 (quantum=4), then Q2 (FCFS)
+   - Starving processes get promoted back up after waiting ≥10 time units
 ```
 
 ### Sample Data
 
 Click the **Load Sample Data** button to automatically populate the process queue with test data:
-- P1: Arrival=0, Burst=5, Priority=0
-- P2: Arrival=1, Burst=3, Priority=1
-- P3: Arrival=2, Burst=8, Priority=2
-- P4: Arrival=3, Burst=6, Priority=0
+- P1: Arrival=0, Burst=5
+- P2: Arrival=1, Burst=3
+- P3: Arrival=2, Burst=8
+- P4: Arrival=3, Burst=6
 
 ### Understanding Results
 
@@ -262,7 +268,7 @@ process_algorithm/
 2. **Test with similar burst times**: Compare performance when processes are equal
 3. **Test with one long process**: Observe convoy effect in FCFS vs other algorithms
 4. **Adjust time quantum in RR**: See how it affects context switches and performance
-5. **Mix priorities in MLFQ**: Observe how processes move between queues
+5. **Watch MLFQ demotion**: Add a mix of short and long burst-time processes to see how they migrate across queues
 
 ## Troubleshooting
 
