@@ -1,0 +1,45 @@
+# Process Scheduling Simulator - Git Ignore
+
+# Compiled Java class files
+*.class
+
+# Build directories
+/bin/
+/out/
+/build/
+/target/
+bin/
+build/
+out/
+
+# Packaged archives
+*.jar
+*.war
+*.ear
+
+# IDE and editor files
+/.idea/
+.vscode/
+*.iml
+*.classpath
+*.project
+.settings/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.swp
+*~
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Gradle/Maven wrappers and caches
+/.gradle/
+/.mvn/
+
+# Distribution
+/dist/
+/release/
+
