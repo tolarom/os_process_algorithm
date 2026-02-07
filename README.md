@@ -125,9 +125,11 @@ If you have an IDE like IntelliJ IDEA, Eclipse, or VS Code with Java extension:
 **Queue Structure**:
 | Queue | Priority | Time Quantum | Scheduling |
 |-------|----------|-------------|------------|
-| Q0 | Highest | 2 | Round Robin |
-| Q1 | Medium | 4 | Round Robin |
-| Q2 | Lowest | ∞ | FCFS (runs to completion) |
+| Q0 | Highest | Configurable (default: 2) | Round Robin |
+| Q1 | Medium | Configurable (default: 4) | Round Robin |
+| Q2 | Lowest | ∞ (FCFS) | Runs to completion |
+
+**Time Quanta**: Q0 and Q1 can be customized via separate input fields when MLFQ is selected. Q2 always uses FCFS (infinite quantum).
 
 **Promotion / Demotion Rules**:
 - **Demotion**: A process that exhausts its full quantum is moved down one queue level (Q0 → Q1 → Q2).
@@ -167,8 +169,13 @@ If you have an IDE like IntelliJ IDEA, Eclipse, or VS Code with Java extension:
      - Round Robin (RR)
      - Multi-Level Feedback Queue (MLFQ)
 
-4. **Set parameters** (if applicable):
-   - **Time Quantum**: Required for Round Robin (e.g., 2, 3, 4)
+4. **Set parameters** (based on selected algorithm):
+   - **Round Robin**: Enter time quantum in the "Quantum" field (e.g., `2`, `3`, `4`)
+   - **MLFQ**: Enter time quanta for Q0 and Q1 in separate fields:
+     - **Q0**: Quantum for highest priority queue (default: `2`)
+     - **Q1**: Quantum for medium priority queue (default: `4`)
+     - **Q2**: Always FCFS (no configuration needed)
+   - **Other algorithms (FCFS, SJF, SRTF)**: No quantum fields displayed
 
 5. **Run simulation**:
    - Click **Run Scheduler**
@@ -213,10 +220,14 @@ If you have an IDE like IntelliJ IDEA, Eclipse, or VS Code with Java extension:
 ```
 1. Add processes (all start in Queue 0 — highest priority)
 2. Select "MLFQ" from dropdown
-3. Click "Run Scheduler"
-4. Observe:
-   - Short processes finish quickly in Q0 (quantum=2)
-   - Longer processes get demoted to Q1 (quantum=4), then Q2 (FCFS)
+3. Set quantum values:
+   - Q0: Time quantum for highest priority queue (default: 2)
+   - Q1: Time quantum for medium priority queue (default: 4)
+   - Q2: Always FCFS (runs to completion)
+4. Click "Run Scheduler"
+5. Observe:
+   - Short processes finish quickly in Q0
+   - Longer processes get demoted to Q1, then Q2 (FCFS)
    - Starving processes get promoted back up after waiting ≥10 time units
 ```
 

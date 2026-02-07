@@ -26,7 +26,9 @@ public class ProcessSimulator extends JFrame {
 
     private DefaultTableModel tableModel;
     private JTextArea outputArea;
-    private JTextField nameField, arrivalField, burstField, quantumField;
+    private JTextField nameField, arrivalField, burstField;
+    private JTextField quantumRRField, quantumQ0Field, quantumQ1Field;
+    private JLabel quantumRRLabel, quantumQ0Label, quantumQ1Label;
     private JComboBox<String> algorithmCombo;
     private GanttPanel ganttPanel;
     private JLabel statusLabel;
@@ -35,7 +37,7 @@ public class ProcessSimulator extends JFrame {
     public ProcessSimulator() {
         super("Process Scheduling Simulator");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(1000, 750);
+        setSize(1200, 750);
         setLocationRelativeTo(null);
         loadAppIcon();
         getContentPane().setBackground(BACKGROUND);
@@ -128,16 +130,23 @@ public class ProcessSimulator extends JFrame {
         nameField.setText("P" + processCounter);  // Auto-fill with next process name
         arrivalField = createStyledTextField(5);
         burstField = createStyledTextField(5);
-        quantumField = createStyledTextField(5);
-        quantumField.setText("2");
-        // Priority removed — field reserved previously for MLFQ
+        
+        // Quantum fields for different algorithms
+        quantumRRField = createStyledTextField(5);
+        quantumRRField.setText("2");
+        quantumQ0Field = createStyledTextField(5);
+        quantumQ0Field.setText("2");
+        quantumQ1Field = createStyledTextField(5);
+        quantumQ1Field.setText("4");
+        
+        // Labels for quantum fields
+        quantumRRLabel = createLabel("Quantum:");
+        quantumQ0Label = createLabel("Q0:");
+        quantumQ1Label = createLabel("Q1:");
 
         algorithmCombo = new JComboBox<>(new String[]{"Round Robin", "FCFS", "SJF", "SRTF", "MLFQ"});
         algorithmCombo.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        algorithmCombo.addActionListener(e -> {
-            boolean isRR = algorithmCombo.getSelectedIndex() == 0;
-            quantumField.setEnabled(isRR);
-        });
+        algorithmCombo.addActionListener(e -> updateQuantumFieldsVisibility());
 
         // Row 0
         gbc.gridx = 0; gbc.gridy = 0;
@@ -156,15 +165,30 @@ public class ProcessSimulator extends JFrame {
         gbc.gridx = 1;
         form.add(burstField, gbc);
 
-        // Row 2
+        // Row 2 - Algorithm
         gbc.gridx = 0; gbc.gridy = 2;
         form.add(createLabel("Algorithm:"), gbc);
-        gbc.gridx = 1;
+        gbc.gridx = 1; gbc.gridwidth = 3;
         form.add(algorithmCombo, gbc);
+        gbc.gridwidth = 1;
+        
+        // Row 3 - Quantum fields (visibility controlled by algorithm selection)
+        gbc.gridy = 3;
+        gbc.gridx = 0;
+        form.add(quantumRRLabel, gbc);
+        gbc.gridx = 1;
+        form.add(quantumRRField, gbc);
+        gbc.gridx = 0;
+        form.add(quantumQ0Label, gbc);
+        gbc.gridx = 1;
+        form.add(quantumQ0Field, gbc);
         gbc.gridx = 2;
-        form.add(createLabel("Quantum:"), gbc);
+        form.add(quantumQ1Label, gbc);
         gbc.gridx = 3;
-        form.add(quantumField, gbc);
+        form.add(quantumQ1Field, gbc);
+        
+        // Set initial visibility
+        updateQuantumFieldsVisibility();
 
         // Buttons
         JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
@@ -194,6 +218,22 @@ public class ProcessSimulator extends JFrame {
         card.add(form, BorderLayout.CENTER);
         card.add(btnPanel, BorderLayout.SOUTH);
         return card;
+    }
+    
+    private void updateQuantumFieldsVisibility() {
+        int idx = algorithmCombo.getSelectedIndex();
+        boolean isRR = (idx == 0);      // Round Robin
+        boolean isMLFQ = (idx == 4);     // MLFQ
+        
+        // RR: show single quantum field
+        quantumRRLabel.setVisible(isRR);
+        quantumRRField.setVisible(isRR);
+        
+        // MLFQ: show Q0 and Q1 fields
+        quantumQ0Label.setVisible(isMLFQ);
+        quantumQ0Field.setVisible(isMLFQ);
+        quantumQ1Label.setVisible(isMLFQ);
+        quantumQ1Field.setVisible(isMLFQ);
     }
 
     private JPanel createTableCard() {
@@ -447,11 +487,11 @@ public class ProcessSimulator extends JFrame {
     private void loadSampleData(ActionEvent e) {
         tableModel.setRowCount(0);
         processCounter = 1;
-        Object[][] samples = {{"P1", 0, 5}, {"P2", 1, 3}, {"P3", 2, 8}, {"P4", 3, 6}};
+        Object[][] samples = {{"P1", 0, 5}, {"P2", 1, 3}, {"P3", 2, 8}, {"P4", 3, 6},{"P5", 4, 2}};
         for (Object[] s : samples) {
             tableModel.addRow(new Object[]{processCounter++, s[0], s[1], s[2]});
         }
-        nameField.setText("P" + processCounter);  // Set next name (P5)
+        nameField.setText("P" + processCounter);
         statusLabel.setText("Loaded sample data");
     }
 
@@ -465,22 +505,40 @@ public class ProcessSimulator extends JFrame {
             int b = Integer.parseInt(tableModel.getValueAt(i, 3).toString());
             list.add(new Proc(n, a, b));
         }
-        int quantum = 2;
-        try { quantum = Integer.parseInt(quantumField.getText().trim()); } catch (NumberFormatException ignored) {}
-
         String algo = (String) algorithmCombo.getSelectedItem();
         SchedulingAlgorithm algorithm = switch (algo) {
             case "FCFS" -> new FCFSAlgorithm(list);
             case "SJF" -> new SJFAlgorithm(list);
             case "SRTF" -> new SRTFAlgorithm(list);
-            case "MLFQ" -> new MLFQAlgorithm(list);
-            default -> new RoundRobinAlgorithm(list, quantum);
+            case "MLFQ" -> {
+                int q0 = parseQuantum(quantumQ0Field.getText().trim(), 2);
+                int q1 = parseQuantum(quantumQ1Field.getText().trim(), 4);
+                yield new MLFQAlgorithm(list, q0, q1);
+            }
+            default -> {
+                int quantum = parseQuantum(quantumRRField.getText().trim(), 2);
+                yield new RoundRobinAlgorithm(list, quantum);
+            }
         };
         
         SimResult result = algorithm.run();
         ganttPanel.setTimeline(result.timeline, result.colorMap);
         outputArea.setText(result.text);
         statusLabel.setText("Simulation complete: " + algo);
+    }
+
+    /**
+     * Parse a single quantum value with fallback to default.
+     */
+    private int parseQuantum(String input, int defaultValue) {
+        if (input == null || input.isEmpty()) {
+            return defaultValue;
+        }
+        try {
+            return Math.max(1, Integer.parseInt(input.trim()));
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
     }
 
     private void showError(String msg) {
